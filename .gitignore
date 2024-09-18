@@ -1,6 +1,7 @@
 /venv
 /config/dev.env
 /config/github_token.txt
+._*
 *.log
 *.tex
 *.aux
