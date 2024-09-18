@@ -11,9 +11,9 @@ def processContent(content):
     lines = content.splitlines()
     new_content = []
 
-    for i, linea in enumerate(lines):
-        if linea.strip():
-            new_content.append(linea)
+    for i, line in enumerate(lines):
+        if line.strip():
+            new_content.append(line)
             if i < len(lines) - 1:
                 if lines[i + 1].strip():
                     new_content.append("")
@@ -132,22 +132,22 @@ def generate_chapters():
 
 def convert_to_ebook():
     metadata = {
-        "authors": "",
-        "title": "",
-        "language": "es",
-        "publisher": "Editorial XYZ",
-        "description": "Una descripción del libro.",
-        "identifier": "ISBN-123456789",
-        "pubdate": datetime.now().strftime("%Y-%m-%d"),
-        "subject": "Ficción",
-        "pages": "200",
-        "cover": "ruta_a_la_portada.jpg",
-        "comments": "Comentarios del lector"
+        "authors": settings.AUTHORS,
+        "title": settings.TITLE,
+        "language": settings.LANGUAGE,
+        "publisher": settings.PUBLISHER,
+        "description": settings.DESCRIPTION,
+        "identifier": settings.IDENTIFIER,
+        "pubdate": settings.PUBDATE,
+        "subject": settings.SUBJECT,
+        "pages": settings.PAGES,
+        "cover": settings.COVER,
+        "comments": settings.COMMENTS
     }
 
     metadata_args = " ".join([f"--metadata {key}=\"{value}\"" for key, value in metadata.items()])
 
-    command = f"ebook-convert {settings.PDF_FILE} {settings.AZW3_FILE}"
+    command = f"ebook-convert {settings.PDF_FILE} {settings.AZW3_FILE} {metadata_args}"
 
     try:
         subprocess.run(command, shell=True, check=True)

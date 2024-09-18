@@ -11,7 +11,16 @@ class CommonSettings(BaseSettings):
 class BookSettings(BaseSettings):
     TITLE: str
     ALIAS: str
-    AUTHOR: str
+    AUTHORS: str
+    LANGUAGE: str
+    PUBLISHER: str
+    DESCRIPTION: str
+    IDENTIFIER: str
+    PUBDATE: str
+    SUBJECT: str
+    PAGES: str
+    COVER: str
+    COMMENTS: str
 
     class Config:
         env_file = f'config/{CommonSettings().ENV}.env'
