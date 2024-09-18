@@ -1,0 +1,10 @@
+/venv
+/config/dev.env
+/config/github_token.txt
+*.log
+*.tex
+*.aux
+*.pdf
+*.azw3
+*.txt
+!requirements.txt
