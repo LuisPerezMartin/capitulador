@@ -32,48 +32,80 @@ def processContent(content):
 
     return "\n".join(new_content)
 
-with open(settings.SOURCE_FILE, "r", encoding="utf-8") as file:
-    dev_content = file.read()
+try:
+    with open(settings.SOURCE_FILE, "r", encoding="utf-8") as file:
+        dev_content = file.read()
+except Exception as e:
+    print(f"Error reading source file: {e}")
+    exit(1)
 
 content_work = processContent(dev_content)
 
-with open(settings.WORK_FILE, "w", encoding="utf-8") as file:
-    file.write(content_work)
+try:
+    with open(settings.WORK_FILE, "w", encoding="utf-8") as file:
+        file.write(content_work)
+except Exception as e:
+    print(f"Error writing work file: {e}")
+    exit(1)
 
-latex_content = pf.convert_text(content_work, input_format="markdown", output_format="latex")
+try:
+    latex_content = pf.convert_text(content_work, input_format="markdown", output_format="latex")
+except Exception as e:
+    print(f"Error converting to LaTeX: {e}")
+    exit(1)
 
-with open(settings.LATEX_FILE, "w", encoding="utf-8") as latex_file:
-    latex_file.write(settings.LATEX_BEGIN)
-    latex_file.write(latex_content)
-    latex_file.write(settings.LATEX_END)
+try:
+    with open(settings.LATEX_FILE, "w", encoding="utf-8") as latex_file:
+        latex_file.write(settings.LATEX_BEGIN)
+        latex_file.write(latex_content)
+        latex_file.write(settings.LATEX_END)
+except Exception as e:
+    print(f"Error writing LaTeX file: {e}")
+    exit(1)
 
 output_directory = "generated"
-subprocess.run(["pdflatex", "-output-directory", output_directory, settings.LATEX_FILE], check=True)
+try:
+    subprocess.run(["pdflatex", "-output-directory", output_directory, settings.LATEX_FILE], check=True)
+    print("LaTeX conversion finished")
+except subprocess.CalledProcessError as e:
+    print(f"Error running pdflatex: {e}")
+    exit(1)
 
-print("LaTeX conversion finished")
-
-subprocess.run(["mkdir", "-p", settings.BACKUPS_FOLDER], check=True)
+try:
+    subprocess.run(["mkdir", "-p", settings.BACKUPS_FOLDER], check=True)
+except subprocess.CalledProcessError as e:
+    print(f"Error creating backups folder: {e}")
+    exit(1)
 
 current_date = datetime.now().strftime("%Y-%m-%d")
 backup_name = f"{current_date}_manuscript.txt"
-shutil.copy(settings.SOURCE_FILE, os.path.join(settings.BACKUPS_FOLDER, backup_name))
+try:
+    shutil.copy(settings.SOURCE_FILE, os.path.join(settings.BACKUPS_FOLDER, backup_name))
+except Exception as e:
+    print(f"Error copying backup file: {e}")
+    exit(1)
 
-with open(settings.SOURCE_FILE, "r", encoding="utf-8") as archivo:
-    lines = archivo.readlines()
+try:
+    with open(settings.SOURCE_FILE, "r", encoding="utf-8") as archivo:
+        lines = archivo.readlines()
+except Exception as e:
+    print(f"Error reading source file for chapters: {e}")
+    exit(1)
 
 chapter_count = 0
 capitulo = None
 capitulo_text = []
 chapter_pattern = re.compile(r"^# Chapter \d+")
 
-with open(settings.SOURCE_FILE, "r", encoding="utf-8") as file:
-    lines = file.readlines()
-
 for line in lines:
     if chapter_pattern.match(line):
         if capitulo is not None:
-            with open(f"generated/chapters/chapter{chapter_count+1}.txt", "w", encoding="utf-8") as capitulo_file:
-                capitulo_file.writelines(capitulo_text)
+            try:
+                with open(f"generated/chapters/chapter{chapter_count+1}.txt", "w", encoding="utf-8") as capitulo_file:
+                    capitulo_file.writelines(capitulo_text)
+            except Exception as e:
+                print(f"Error writing chapter file: {e}")
+                exit(1)
             chapter_count += 1
             capitulo_text = []
         capitulo = line.strip()
@@ -83,16 +115,19 @@ for line in lines:
 
 chapter_count += 1
 if capitulo is not None:
-    with open(f"generated/chapters/chapter{chapter_count}.txt", "w", encoding="utf-8") as capitulo_file:
-        capitulo_file.writelines(capitulo_text)
-
+    try:
+        with open(f"generated/chapters/chapter{chapter_count}.txt", "w", encoding="utf-8") as capitulo_file:
+            capitulo_file.writelines(capitulo_text)
+    except Exception as e:
+        print(f"Error writing final chapter file: {e}")
+        exit(1)
 
 print(f"{chapter_count} Chapter files generated")
 print(f"Backup {backup_name} in {settings.BACKUPS_FOLDER}")
 
 metadata = {
-    "authors": "Luis Pérez Martín",
-    "title": "Los Machistas del Campo de Margaritas",
+    "authors": "",
+    "title": "",
     "language": "es",
     "publisher": "Editorial XYZ",
     "description": "Una descripción del libro.",
@@ -108,6 +143,14 @@ metadata_args = " ".join([f"--metadata {key}=\"{value}\"" for key, value in meta
 
 command = f"ebook-convert {settings.PDF_FILE} {settings.AZW3_FILE}"
 
-subprocess.run(command, shell=True)
+try:
+    subprocess.run(command, shell=True, check=True)
+except subprocess.CalledProcessError as e:
+    print(f"Error converting to AZW3: {e}")
+    exit(1)
 
-subprocess.run("dot_clean .", shell=True)
+try:
+    subprocess.run("dot_clean .", shell=True, check=True)
+except subprocess.CalledProcessError as e:
+    print(f"Error running dot_clean: {e}")
+    exit(1)
