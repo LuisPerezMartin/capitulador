@@ -131,23 +131,17 @@ def generate_chapters():
     print(f"{chapter_count} Chapter files generated")
 
 def convert_to_ebook():
-    metadata = {
-        "authors": settings.AUTHORS,
-        "title": settings.TITLE,
-        "language": settings.LANGUAGE,
-        "publisher": settings.PUBLISHER,
-        "description": settings.DESCRIPTION,
-        "identifier": settings.IDENTIFIER,
-        "pubdate": settings.PUBDATE,
-        "subject": settings.SUBJECT,
-        "pages": settings.PAGES,
-        "cover": settings.COVER,
-        "comments": settings.COMMENTS
-    }
+    metadata_args = [
+        f"--authors=\"{settings.AUTHORS}\"",
+        f"--title=\"{settings.TITLE}\"",
+        f"--language=\"{settings.LANGUAGE}\"",
+        f"--publisher=\"{settings.PUBLISHER}\"",
+        f"--comments=\"{settings.DESCRIPTION}\"",
+        f"--pubdate=\"{settings.PUBDATE}\"",
+        f"--tags=\"{settings.SUBJECT}\""
+    ]
 
-    metadata_args = " ".join([f"--metadata {key}=\"{value}\"" for key, value in metadata.items()])
-
-    command = f"ebook-convert {settings.PDF_FILE} {settings.AZW3_FILE} {metadata_args}"
+    command = f"ebook-convert {settings.PDF_FILE} {settings.AZW3_FILE} {' '.join(metadata_args)}"
 
     try:
         subprocess.run(command, shell=True, check=True)
@@ -156,11 +150,16 @@ def convert_to_ebook():
         exit(1)
 
 def clean_dot_files():
-    try:
-        subprocess.run("dot_clean .", shell=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running dot_clean: {e}")
-        exit(1)
+    import platform
+    # dot_clean is a macOS-only command
+    if platform.system() == "Darwin":
+        try:
+            subprocess.run("dot_clean .", shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running dot_clean: {e}")
+            exit(1)
+    else:
+        print("Skipping dot_clean (macOS only command)")
 
 def main():
     content = read_source_file()
