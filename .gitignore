@@ -1,6 +1,7 @@
 /venv
 /config/dev.env
-/config/github_token.txt
+/config/__pycache__/
+/config/__pycache__
 ._*
 *.log
 *.tex
