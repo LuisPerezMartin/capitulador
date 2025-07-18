@@ -2,6 +2,7 @@
 /config/dev.env
 /config/__pycache__/
 /config/__pycache__
+__pycache__
 ._*
 *.log
 *.tex
