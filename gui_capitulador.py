@@ -52,6 +52,8 @@ class CapituladorGUI:
         # Edit menu
         edit_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Editar", menu=edit_menu)
+        edit_menu.add_command(label="Metadatos del libro", command=self._edit_metadata, accelerator="Ctrl+M")
+        edit_menu.add_separator()
         edit_menu.add_command(label="Nuevo capítulo", command=self._insert_new_chapter, accelerator="Ctrl+N")
         edit_menu.add_separator()
         edit_menu.add_command(label="Salto de página", command=self._insert_page_break, accelerator="Ctrl+P")
@@ -103,6 +105,7 @@ class CapituladorGUI:
         self.root.bind("<Control-q>", lambda e: self._on_closing())
         
         # Edit shortcuts
+        self.root.bind("<Control-m>", lambda e: self._edit_metadata())
         self.root.bind("<Control-n>", lambda e: self._insert_new_chapter())
         self.root.bind("<Control-p>", lambda e: self._insert_page_break())
         self.root.bind("<Control-Shift-P>", lambda e: self._insert_paragraph_space())
@@ -251,6 +254,138 @@ class CapituladorGUI:
             self.word_count_var.set("Palabras: 0")
     
     # === EDITING FUNCTIONS ===
+    
+    def _edit_metadata(self):
+        # Open metadata editor dialog
+        metadata_window = tk.Toplevel(self.root)
+        metadata_window.title("Editar Metadatos del Libro")
+        metadata_window.geometry("500x450")
+        metadata_window.resizable(False, False)
+        metadata_window.transient(self.root)
+        metadata_window.grab_set()
+        
+        # Center the window
+        metadata_window.geometry("+%d+%d" % (
+            self.root.winfo_rootx() + 50,
+            self.root.winfo_rooty() + 50
+        ))
+        
+        # Create form fields
+        fields = {}
+        
+        # Title field
+        ttk.Label(metadata_window, text="Título:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        fields['title'] = tk.StringVar(value=self.book_settings.TITLE)
+        ttk.Entry(metadata_window, textvariable=fields['title'], width=50).grid(row=0, column=1, padx=10, pady=5)
+        
+        # Alias field
+        ttk.Label(metadata_window, text="Alias:").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        fields['alias'] = tk.StringVar(value=self.book_settings.ALIAS)
+        ttk.Entry(metadata_window, textvariable=fields['alias'], width=50).grid(row=1, column=1, padx=10, pady=5)
+        
+        # Authors field
+        ttk.Label(metadata_window, text="Autor(es):").grid(row=2, column=0, sticky="w", padx=10, pady=5)
+        fields['authors'] = tk.StringVar(value=self.book_settings.AUTHORS)
+        ttk.Entry(metadata_window, textvariable=fields['authors'], width=50).grid(row=2, column=1, padx=10, pady=5)
+        
+        # Language field
+        ttk.Label(metadata_window, text="Idioma:").grid(row=3, column=0, sticky="w", padx=10, pady=5)
+        fields['language'] = tk.StringVar(value=self.book_settings.LANGUAGE)
+        ttk.Entry(metadata_window, textvariable=fields['language'], width=50).grid(row=3, column=1, padx=10, pady=5)
+        
+        # Publisher field
+        ttk.Label(metadata_window, text="Editorial:").grid(row=4, column=0, sticky="w", padx=10, pady=5)
+        fields['publisher'] = tk.StringVar(value=self.book_settings.PUBLISHER)
+        ttk.Entry(metadata_window, textvariable=fields['publisher'], width=50).grid(row=4, column=1, padx=10, pady=5)
+        
+        # Publication date field
+        ttk.Label(metadata_window, text="Fecha de publicación:").grid(row=5, column=0, sticky="w", padx=10, pady=5)
+        fields['pubdate'] = tk.StringVar(value=self.book_settings.PUBDATE)
+        ttk.Entry(metadata_window, textvariable=fields['pubdate'], width=50).grid(row=5, column=1, padx=10, pady=5)
+        
+        # Subject/tags field
+        ttk.Label(metadata_window, text="Etiquetas:").grid(row=6, column=0, sticky="w", padx=10, pady=5)
+        fields['subject'] = tk.StringVar(value=self.book_settings.SUBJECT)
+        ttk.Entry(metadata_window, textvariable=fields['subject'], width=50).grid(row=6, column=1, padx=10, pady=5)
+        
+        # Identifier field
+        ttk.Label(metadata_window, text="Identificador:").grid(row=7, column=0, sticky="w", padx=10, pady=5)
+        fields['identifier'] = tk.StringVar(value=self.book_settings.IDENTIFIER)
+        ttk.Entry(metadata_window, textvariable=fields['identifier'], width=50).grid(row=7, column=1, padx=10, pady=5)
+        
+        # Description field (multiline)
+        ttk.Label(metadata_window, text="Descripción:").grid(row=8, column=0, sticky="nw", padx=10, pady=5)
+        description_text = tk.Text(metadata_window, width=40, height=4)
+        description_text.grid(row=8, column=1, padx=10, pady=5)
+        description_text.insert(1.0, self.book_settings.DESCRIPTION)
+        
+        # Buttons frame
+        button_frame = ttk.Frame(metadata_window)
+        button_frame.grid(row=9, column=0, columnspan=2, pady=20)
+        
+        def save_metadata():
+            # Update book settings with new values
+            try:
+                # Save to environment file
+                env_file_path = Path("config/dev.env")
+                env_content = []
+                
+                # Read existing env file
+                if env_file_path.exists():
+                    with open(env_file_path, 'r', encoding='utf-8') as f:
+                        env_content = f.readlines()
+                
+                # Update or add new values
+                new_values = {
+                    'TITLE': fields['title'].get(),
+                    'ALIAS': fields['alias'].get(),
+                    'AUTHORS': fields['authors'].get(),
+                    'LANGUAGE': fields['language'].get(),
+                    'PUBLISHER': fields['publisher'].get(),
+                    'PUBDATE': fields['pubdate'].get(),
+                    'SUBJECT': fields['subject'].get(),
+                    'IDENTIFIER': fields['identifier'].get(),
+                    'DESCRIPTION': description_text.get(1.0, tk.END + "-1c")
+                }
+                
+                # Update env file content
+                updated_content = []
+                updated_keys = set()
+                
+                for line in env_content:
+                    if '=' in line and not line.strip().startswith('#'):
+                        key = line.split('=')[0].strip()
+                        if key in new_values:
+                            updated_content.append(f"{key}={new_values[key]}\n")
+                            updated_keys.add(key)
+                        else:
+                            updated_content.append(line)
+                    else:
+                        updated_content.append(line)
+                
+                # Add new keys that weren't in the file
+                for key, value in new_values.items():
+                    if key not in updated_keys:
+                        updated_content.append(f"{key}={value}\n")
+                
+                # Write updated content
+                with open(env_file_path, 'w', encoding='utf-8') as f:
+                    f.writelines(updated_content)
+                
+                # Reload book settings
+                self.book_settings = BookSettings()
+                
+                messagebox.showinfo("Éxito", "Metadatos actualizados correctamente")
+                metadata_window.destroy()
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Error guardando metadatos: {e}")
+        
+        def cancel_edit():
+            metadata_window.destroy()
+        
+        ttk.Button(button_frame, text="Guardar", command=save_metadata).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancelar", command=cancel_edit).pack(side=tk.LEFT, padx=5)
     
     def _get_next_chapter_number(self):
         # Calculate next chapter number
