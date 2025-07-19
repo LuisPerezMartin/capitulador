@@ -1,5 +1,3 @@
-# Professional manuscript editor GUI
-
 import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext
 from threading import Thread
@@ -8,7 +6,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from capitulador import Capitulador, CapituladorError
+from capitulador import Capitulador
 from config.config import settings, BookSettings
 
 
@@ -67,7 +65,7 @@ class CapituladorGUI:
         ttk.Button(toolbar, text="💾 Guardar", command=self._save_file).pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=5)
         ttk.Button(toolbar, text="📋 Metadatos", command=self._edit_metadata).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="📄 Cap.", command=self._insert_chapter).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="📄 Capítulo", command=self._insert_chapter).pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=5)
         ttk.Button(toolbar, text="⚡ Todo", command=self._process_all).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="📖 PDF", command=self._generate_pdf).pack(side=tk.LEFT, padx=2)
@@ -191,16 +189,14 @@ class CapituladorGUI:
             self.word_count_var.set("Palabras: 0")
     
     def _set_status(self, message, status_type="normal"):
-        colors = {"normal": "black", "success": "green", "error": "red", "processing": "blue"}
         self.status_var.set(message)
-        self.status_label.configure(foreground=colors.get(status_type, "black"))
     
     def _animate_status(self, base_text):
         if not hasattr(self, '_animation_running') or not self._animation_running:
             return
         
-        dots = "●" * (getattr(self, '_animation_dots', 0) + 1)
-        self._set_status(f"{base_text} {dots}", "processing")
+        dots = "." * (getattr(self, '_animation_dots', 0) + 1)
+        self._set_status(f"{base_text}{dots}", "processing")
         self._animation_dots = (getattr(self, '_animation_dots', 0) + 1) % 3
         self.animation_job = self.root.after(500, lambda: self._animate_status(base_text))
     
@@ -310,7 +306,20 @@ class CapituladorGUI:
         self._update_status()
     
     def _get_output_folder(self):
-        folder = filedialog.askdirectory(title="Seleccionar carpeta de salida")
+        import platform
+        system = platform.system()
+        
+        if system == "Windows":
+            documents_folder = Path.home() / "Documents"
+        elif system == "Darwin":  # macOS
+            documents_folder = Path.home() / "Documents"
+        else:  # Linux and other Unix-like systems
+            documents_folder = Path.home() / "Documents"
+        
+        folder = filedialog.askdirectory(
+            title="Seleccionar carpeta de salida",
+            initialdir=str(documents_folder))
+        
         if folder:
             book_title = self.book_settings.TITLE.replace(" ", "_").replace("/", "_").replace("\\", "_")
             output_path = Path(folder) / book_title
