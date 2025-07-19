@@ -5,10 +5,11 @@ from tkinter import ttk, messagebox, filedialog, scrolledtext
 from threading import Thread
 import os
 import re
+import subprocess
 from pathlib import Path
 
-from capitulador import Capitulador
-from config.config import settings
+from capitulador import Capitulador, CapituladorError
+from config.config import settings, BookSettings
 
 
 class CapituladorGUI:
@@ -285,6 +286,21 @@ class CapituladorGUI:
         # Crear separador en el historial de undo
         self.text_editor.edit_separator()
     
+    def _select_output_folder(self):
+        # Permite al usuario seleccionar la carpeta de salida para los archivos generados
+        folder = filedialog.askdirectory(
+            title="Seleccionar carpeta base para archivos generados",
+            initialdir=str(Path(settings.SOURCE_FILE).parent)
+        )
+        if folder:
+            # Crear carpeta con el nombre del título del libro
+            book_settings = BookSettings()
+            book_title = book_settings.TITLE.replace(" ", "_").replace("/", "_").replace("\\", "_")
+            book_folder = Path(folder) / book_title
+            book_folder.mkdir(exist_ok=True)
+            return book_folder
+        return None
+    
     def _save_current_content(self):
         # Guarda el contenido actual al archivo de manuscrito
         try:
@@ -296,71 +312,154 @@ class CapituladorGUI:
     
     # Funciones de procesamiento en hilos separados
     def _process_all(self):
+        output_folder = self._select_output_folder()
+        if not output_folder:
+            return
         self._save_current_content()
-        Thread(target=self._run_process_all, daemon=True).start()
+        Thread(target=self._run_process_all, args=(output_folder,), daemon=True).start()
     
     def _generate_pdf_only(self):
+        output_folder = self._select_output_folder()
+        if not output_folder:
+            return
         self._save_current_content()
-        Thread(target=self._run_generate_pdf, daemon=True).start()
+        Thread(target=self._run_generate_pdf, args=(output_folder,), daemon=True).start()
     
     def _generate_chapters_only(self):
+        output_folder = self._select_output_folder()
+        if not output_folder:
+            return
         self._save_current_content()
-        Thread(target=self._run_generate_chapters, daemon=True).start()
+        Thread(target=self._run_generate_chapters, args=(output_folder,), daemon=True).start()
     
     def _generate_ebook_only(self):
+        output_folder = self._select_output_folder()
+        if not output_folder:
+            return
         self._save_current_content()
-        Thread(target=self._run_generate_ebook, daemon=True).start()
+        Thread(target=self._run_generate_ebook, args=(output_folder,), daemon=True).start()
     
-    def _run_process_all(self):
+    def _run_process_all(self, output_folder):
         try:
             self.root.after(0, lambda: self.status_var.set("Procesando..."))
-            self.capitulador.process_manuscript()
+            
+            # Crear una instancia temporal con rutas personalizadas
+            content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
+            processed_content = self.capitulador.content_processor.process_content(content)
+            
+            # Crear archivos en la carpeta seleccionada
+            book_settings = BookSettings()
+            latex_file = output_folder / f"{book_settings.ALIAS}.tex"
+            pdf_file = output_folder / f"{book_settings.ALIAS}.pdf"
+            azw3_file = output_folder / f"{book_settings.ALIAS}.azw3"
+            
+            # Generar LaTeX
+            latex_content = self.capitulador.latex_converter.convert_to_latex(processed_content)
+            complete_latex = self.capitulador.latex_converter.create_complete_latex_document(latex_content)
+            self.capitulador.file_handler.write_file(str(latex_file), complete_latex)
+            
+            # Generar PDF
+            subprocess.run(["pdflatex", "-output-directory", str(output_folder), str(latex_file)], 
+                         check=True, capture_output=True)
+            
+            # Generar capítulos en subcarpeta
+            chapters_folder = output_folder / "chapters"
+            chapters_folder.mkdir(exist_ok=True)
+            count = self._generate_chapters_in_folder(processed_content, chapters_folder)
+            
+            # Generar eBook
+            subprocess.run(["ebook-convert", str(pdf_file), str(azw3_file)], 
+                         check=True, capture_output=True)
+            
             self.root.after(0, lambda: self.status_var.set("Completado"))
-            self.root.after(0, lambda: messagebox.showinfo("Éxito", "Procesado exitosamente"))
+            self.root.after(0, lambda: messagebox.showinfo("Éxito", f"Archivos generados en {output_folder}"))
         except Exception as e:
             self.root.after(0, lambda: self.status_var.set(f"Error: {str(e)[:50]}"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     
-    def _run_generate_pdf(self):
+    def _run_generate_pdf(self, output_folder):
         try:
             self.root.after(0, lambda: self.status_var.set("Generando PDF..."))
             content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
             processed_content = self.capitulador.content_processor.process_content(content)
             latex_content = self.capitulador.latex_converter.convert_to_latex(processed_content)
             complete_latex = self.capitulador.latex_converter.create_complete_latex_document(latex_content)
-            self.capitulador.file_handler.write_file(settings.LATEX_FILE, complete_latex)
-            self.capitulador.pdf_generator.generate_pdf()
+            
+            book_settings = BookSettings()
+            latex_file = output_folder / f"{book_settings.ALIAS}.tex"
+            self.capitulador.file_handler.write_file(str(latex_file), complete_latex)
+            
+            subprocess.run(["pdflatex", "-output-directory", str(output_folder), str(latex_file)], 
+                         check=True, capture_output=True)
+            
             self.root.after(0, lambda: self.status_var.set("PDF generado"))
-            self.root.after(0, lambda: messagebox.showinfo("Éxito", "PDF generado"))
+            self.root.after(0, lambda: messagebox.showinfo("Éxito", f"PDF generado en {output_folder}"))
         except Exception as e:
             self.root.after(0, lambda: self.status_var.set(f"Error: {str(e)[:50]}"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     
-    def _run_generate_chapters(self):
+    def _run_generate_chapters(self, output_folder):
         try:
             self.root.after(0, lambda: self.status_var.set("Generando capítulos..."))
-            count = self.capitulador.chapter_generator.generate_chapters()
+            content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
+            processed_content = self.capitulador.content_processor.process_content(content)
+            
+            chapters_folder = output_folder / "chapters"
+            chapters_folder.mkdir(exist_ok=True)
+            count = self._generate_chapters_in_folder(processed_content, chapters_folder)
+            
             self.root.after(0, lambda: self.status_var.set(f"{count} capítulos generados"))
-            self.root.after(0, lambda: messagebox.showinfo("Éxito", f"{count} capítulos generados"))
+            self.root.after(0, lambda: messagebox.showinfo("Éxito", f"{count} capítulos generados en {chapters_folder}"))
         except Exception as e:
             self.root.after(0, lambda: self.status_var.set(f"Error: {str(e)[:50]}"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     
-    def _run_generate_ebook(self):
+    def _run_generate_ebook(self, output_folder):
         try:
             self.root.after(0, lambda: self.status_var.set("Generando eBook..."))
             content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
             processed_content = self.capitulador.content_processor.process_content(content)
             latex_content = self.capitulador.latex_converter.convert_to_latex(processed_content)
             complete_latex = self.capitulador.latex_converter.create_complete_latex_document(latex_content)
-            self.capitulador.file_handler.write_file(settings.LATEX_FILE, complete_latex)
-            self.capitulador.pdf_generator.generate_pdf()
-            self.capitulador.ebook_converter.convert_to_ebook()
+            
+            book_settings = BookSettings()
+            latex_file = output_folder / f"{book_settings.ALIAS}.tex"
+            pdf_file = output_folder / f"{book_settings.ALIAS}.pdf"
+            azw3_file = output_folder / f"{book_settings.ALIAS}.azw3"
+            
+            self.capitulador.file_handler.write_file(str(latex_file), complete_latex)
+            
+            subprocess.run(["pdflatex", "-output-directory", str(output_folder), str(latex_file)], 
+                         check=True, capture_output=True)
+            subprocess.run(["ebook-convert", str(pdf_file), str(azw3_file)], 
+                         check=True, capture_output=True)
+            
             self.root.after(0, lambda: self.status_var.set("eBook generado"))
-            self.root.after(0, lambda: messagebox.showinfo("Éxito", "eBook generado"))
+            self.root.after(0, lambda: messagebox.showinfo("Éxito", f"eBook generado en {output_folder}"))
         except Exception as e:
             self.root.after(0, lambda: self.status_var.set(f"Error: {str(e)[:50]}"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+    
+    def _generate_chapters_in_folder(self, content, chapters_folder):
+        # Genera archivos de capítulos en la carpeta especificada
+        try:
+            chapter_count = 0
+            chapter_pattern = r'# Chapter \d+'
+            chapters = re.split(chapter_pattern, content)
+            
+            if len(chapters) > 1:
+                chapters = chapters[1:]  # Remover contenido antes del primer capítulo
+                
+                for i, chapter_content in enumerate(chapters, 1):
+                    if chapter_content.strip():
+                        chapter_file = chapters_folder / f"chapter{i}.txt"
+                        with open(chapter_file, 'w', encoding='utf-8') as f:
+                            f.write(f"# Chapter {i}\n{chapter_content.strip()}")
+                        chapter_count += 1
+            
+            return chapter_count
+        except Exception as e:
+            raise CapituladorError(f"Error generando capítulos: {e}")
     
     def run(self):
         self.root.mainloop()
