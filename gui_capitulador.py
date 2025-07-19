@@ -44,6 +44,9 @@ class CapituladorGUI:
         edit_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Editar", menu=edit_menu)
         edit_menu.add_command(label="Nuevo capítulo", command=self._insert_new_chapter, accelerator="Ctrl+N")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Salto de página", command=self._insert_page_break, accelerator="Ctrl+P")
+        edit_menu.add_command(label="Espacio de párrafo", command=self._insert_paragraph_space, accelerator="Ctrl+Shift+P")
         
         # Menú Procesar
         process_menu = tk.Menu(menubar, tearoff=0)
@@ -89,6 +92,8 @@ class CapituladorGUI:
         
         # Atajos de teclado para edición
         self.root.bind("<Control-n>", lambda e: self._insert_new_chapter())
+        self.root.bind("<Control-p>", lambda e: self._insert_page_break())
+        self.root.bind("<Control-Shift-P>", lambda e: self._insert_paragraph_space())
         self.root.bind("<Control-z>", self._undo)
         self.root.bind("<Control-y>", self._redo)
         self.root.bind("<Control-Shift-Z>", self._redo)
@@ -245,6 +250,32 @@ class CapituladorGUI:
         # Mover el cursor al final del documento
         self.text_editor.mark_set(tk.INSERT, tk.END)
         self.text_editor.see(tk.END)
+        
+        # Marcar como modificado
+        self.is_modified = True
+        self._update_title()
+        self._update_status()
+        
+        # Crear separador en el historial de undo
+        self.text_editor.edit_separator()
+    
+    def _insert_page_break(self):
+        # Inserta un salto de página en la posición del cursor
+        cursor_pos = self.text_editor.index(tk.INSERT)
+        self.text_editor.insert(cursor_pos, "\n\n\\newpage\n\n")
+        
+        # Marcar como modificado
+        self.is_modified = True
+        self._update_title()
+        self._update_status()
+        
+        # Crear separador en el historial de undo
+        self.text_editor.edit_separator()
+    
+    def _insert_paragraph_space(self):
+        # Inserta un espacio de párrafo en la posición del cursor
+        cursor_pos = self.text_editor.index(tk.INSERT)
+        self.text_editor.insert(cursor_pos, "\n\n\\vspace{12pt}\n\n")
         
         # Marcar como modificado
         self.is_modified = True
