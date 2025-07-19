@@ -28,7 +28,6 @@ class BookSettings(BaseSettings):
 
 class PathSettings(BaseSettings):
     SOURCE_FILE: str = "manuscript/manuscript.txt"
-    WORK_FILE: str = "generated/intermediate/manuscript_work.txt"
     @property
     def AZW3_FILE(self) -> str:
         return f"generated/{BookSettings().ALIAS}.azw3"
