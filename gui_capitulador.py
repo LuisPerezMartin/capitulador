@@ -26,6 +26,11 @@ class CapituladorGUI:
         self.capitulador = Capitulador()
         self.book_settings = BookSettings()
         
+        # Animation variables for processing status
+        self.animation_running = False
+        self.animation_dots = 0
+        self.animation_job = None
+        
         self._initialize_ui()
     
     def _initialize_ui(self):
@@ -213,6 +218,7 @@ class CapituladorGUI:
     
     def _on_closing(self):
         # Handle application closing
+        self._stop_processing_animation()  # Stop any running animations
         if self._check_unsaved_changes():
             self.root.destroy()
     
@@ -252,6 +258,30 @@ class CapituladorGUI:
             self.word_count_var.set(f"Palabras: {words:,}")
         except:
             self.word_count_var.set("Palabras: 0")
+    
+    def _start_processing_animation(self, base_text="Procesando"):
+        # Start animated dots for processing status
+        self.animation_running = True
+        self.animation_dots = 0
+        self._animate_processing_dots(base_text)
+    
+    def _stop_processing_animation(self):
+        # Stop processing animation
+        self.animation_running = False
+        if self.animation_job:
+            self.root.after_cancel(self.animation_job)
+            self.animation_job = None
+    
+    def _animate_processing_dots(self, base_text):
+        # Animate dots for processing feedback
+        if not self.animation_running:
+            return
+            
+        dots = "." * (self.animation_dots + 1)
+        self.status_var.set(f"{base_text}{dots}")
+        
+        self.animation_dots = (self.animation_dots + 1) % 3
+        self.animation_job = self.root.after(500, lambda: self._animate_processing_dots(base_text))
     
     # === EDITING FUNCTIONS ===
     
@@ -508,7 +538,7 @@ class CapituladorGUI:
     def _run_process_all(self, output_folder):
         # Execute complete processing: LaTeX, PDF, chapters and eBook
         try:
-            self.root.after(0, lambda: self.status_var.set("Procesando..."))
+            self.root.after(0, lambda: self._start_processing_animation("Procesando"))
             
             # Read and process content
             content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
@@ -540,21 +570,24 @@ class CapituladorGUI:
             # Clean intermediate files
             self._cleanup_intermediate_files(output_folder)
             
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Completado"))
             self.root.after(0, lambda: messagebox.showinfo("Éxito", 
                 f"Archivos generados en:\n{output_folder}\n\nPDF: {pdf_file.name}\neBook: {azw3_file.name}\nCapítulos: {count}"))
         except subprocess.CalledProcessError as e:
             error_msg = f"Error en procesamiento: {e.stderr if e.stderr else str(e)}"
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Error"))
             self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
         except Exception as e:
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Error"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     
     def _run_generate_pdf(self, output_folder):
         # Execute PDF generation only
         try:
-            self.root.after(0, lambda: self.status_var.set("Generando PDF..."))
+            self.root.after(0, lambda: self._start_processing_animation("Generando PDF"))
             
             content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
             processed_content = self.capitulador.content_processor.process_content(content)
@@ -570,20 +603,23 @@ class CapituladorGUI:
             # Limpiar archivos intermedios
             self._cleanup_intermediate_files(output_folder)
             
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("PDF generado"))
             self.root.after(0, lambda: messagebox.showinfo("Éxito", f"PDF generado en:\n{output_folder}"))
         except subprocess.CalledProcessError as e:
             error_msg = f"Error generando PDF: {e.stderr if e.stderr else str(e)}"
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Error"))
             self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
         except Exception as e:
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Error"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     
     def _run_generate_chapters(self, output_folder):
         # Execute chapters generation only
         try:
-            self.root.after(0, lambda: self.status_var.set("Generando capítulos..."))
+            self.root.after(0, lambda: self._start_processing_animation("Generando capítulos"))
             
             content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
             processed_content = self.capitulador.content_processor.process_content(content)
@@ -592,17 +628,19 @@ class CapituladorGUI:
             chapters_folder.mkdir(exist_ok=True)
             count = self._generate_chapters_in_folder(processed_content, chapters_folder)
             
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set(f"{count} capítulos generados"))
             self.root.after(0, lambda: messagebox.showinfo("Éxito", 
                 f"{count} capítulos generados en:\n{chapters_folder}"))
         except Exception as e:
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Error"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     
     def _run_generate_ebook(self, output_folder):
         # Execute eBook generation only
         try:
-            self.root.after(0, lambda: self.status_var.set("Generando eBook..."))
+            self.root.after(0, lambda: self._start_processing_animation("Generando eBook"))
             
             content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
             processed_content = self.capitulador.content_processor.process_content(content)
@@ -623,13 +661,16 @@ class CapituladorGUI:
             # Limpiar archivos intermedios
             self._cleanup_intermediate_files(output_folder)
             
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("eBook generado"))
             self.root.after(0, lambda: messagebox.showinfo("Éxito", f"eBook generado en:\n{output_folder}"))
         except subprocess.CalledProcessError as e:
             error_msg = f"Error generando eBook: {e.stderr if e.stderr else str(e)}"
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Error"))
             self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
         except Exception as e:
+            self.root.after(0, lambda: self._stop_processing_animation())
             self.root.after(0, lambda: self.status_var.set("Error"))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     
