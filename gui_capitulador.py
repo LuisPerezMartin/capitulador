@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, scrolledtext
+from tkinter import ttk, filedialog, scrolledtext, messagebox
 from threading import Thread
 import os
 import re
@@ -17,14 +17,14 @@ class CapituladorGUI:
         self.root.geometry("1200x800")
         self.root.minsize(900, 600)
         
-        self.file_path = settings.SOURCE_FILE
+        self.file_path = None
         self.is_modified = False
         self.capitulador = Capitulador()
         self.book_settings = BookSettings()
         self.animation_job = None
         
         self._setup_ui()
-        self._load_file()
+        self._show_welcome_message()
     
     def _setup_ui(self):
         self._create_menu()
@@ -41,6 +41,7 @@ class CapituladorGUI:
         menubar.add_cascade(label="Archivo", menu=file_menu)
         file_menu.add_command(label="Abrir", command=self._open_file, accelerator="Ctrl+O")
         file_menu.add_command(label="Guardar", command=self._save_file, accelerator="Ctrl+S")
+        file_menu.add_command(label="Guardar como...", command=self._save_as_file, accelerator="Ctrl+Shift+S")
         file_menu.add_separator()
         file_menu.add_command(label="Salir", command=self._close_app, accelerator="Ctrl+Q")
         
@@ -67,7 +68,7 @@ class CapituladorGUI:
         ttk.Button(toolbar, text="📋 Metadatos", command=self._edit_metadata).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="📄 Capítulo", command=self._insert_chapter).pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        ttk.Button(toolbar, text="⚡ Todo", command=self._process_all).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="🔄 Todo", command=self._process_all).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="📖 PDF", command=self._generate_pdf).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="📚 eBook", command=self._generate_ebook).pack(side=tk.LEFT, padx=2)
     
@@ -93,10 +94,11 @@ class CapituladorGUI:
     def _bind_events(self):
         shortcuts = [
             ("<Control-o>", self._open_file), ("<Control-s>", self._save_file),
-            ("<Control-q>", self._close_app), ("<Control-m>", self._edit_metadata),
-            ("<Control-n>", self._insert_chapter), ("<Control-p>", self._insert_page_break),
-            ("<F5>", self._process_all), ("<F6>", self._generate_pdf),
-            ("<F7>", self._generate_chapters), ("<F8>", self._generate_ebook)
+            ("<Control-Shift-S>", self._save_as_file), ("<Control-q>", self._close_app), 
+            ("<Control-m>", self._edit_metadata), ("<Control-n>", self._insert_chapter), 
+            ("<Control-p>", self._insert_page_break), ("<F5>", self._process_all), 
+            ("<F6>", self._generate_pdf), ("<F7>", self._generate_chapters), 
+            ("<F8>", self._generate_ebook)
         ]
         for key, cmd in shortcuts:
             self.root.bind(key, lambda e, c=cmd: c())
@@ -104,7 +106,7 @@ class CapituladorGUI:
         self.root.protocol("WM_DELETE_WINDOW", self._close_app)
     
     def _load_file(self):
-        if os.path.exists(self.file_path):
+        if self.file_path and os.path.exists(self.file_path):
             try:
                 with open(self.file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -116,9 +118,32 @@ class CapituladorGUI:
             except Exception as e:
                 self._set_status(f"Error cargando archivo: {e}", "error")
         self._update_status()
+
+    def _show_welcome_message(self):
+        """Muestra un mensaje de bienvenida cuando no hay archivo seleccionado"""
+        welcome_text = """Bienvenido a Capitulador
+
+Para comenzar, selecciona un archivo de manuscrito:
+• Usa Ctrl+O o el menú Archivo > Abrir
+• Puedes abrir archivos .txt, .md o cualquier archivo de texto
+• El archivo puede estar en cualquier directorio de tu sistema
+
+Una vez abierto el archivo, podrás:
+• Editar el texto directamente
+• Procesar capítulos automáticamente
+• Generar archivos PDF y AZW3
+• Configurar metadatos del libro
+
+¡Comienza abriendo tu manuscrito!"""
+        
+        self.text_editor.delete(1.0, tk.END)
+        self.text_editor.insert(1.0, welcome_text)
+        self.text_editor.config(state='disabled') 
+        self._update_title()
+        self._update_status()
     
     def _open_file(self):
-        if not self._check_unsaved():
+        if self.file_path and not self._check_unsaved():
             return
         
         file_path = filedialog.askopenfilename(
@@ -129,6 +154,7 @@ class CapituladorGUI:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
+                self.text_editor.config(state='normal')  # Habilitar edición
                 self.text_editor.delete(1.0, tk.END)
                 self.text_editor.insert(1.0, content)
                 self.file_path = file_path
@@ -140,6 +166,17 @@ class CapituladorGUI:
                 self._set_status(f"Error abriendo archivo: {e}", "error")
     
     def _save_file(self):
+        if not self.file_path:
+            # Si no hay archivo seleccionado, abrir diálogo "Guardar como"
+            file_path = filedialog.asksaveasfilename(
+                title="Guardar archivo",
+                defaultextension=".txt",
+                filetypes=[("Archivos de texto", "*.txt"), ("Archivos Markdown", "*.md"), ("Todos", "*.*")])
+            
+            if not file_path:
+                return
+            self.file_path = file_path
+            
         try:
             content = self.text_editor.get(1.0, tk.END + "-1c")
             Path(self.file_path).parent.mkdir(parents=True, exist_ok=True)
@@ -150,12 +187,32 @@ class CapituladorGUI:
             self._set_status("Archivo guardado", "success")
         except Exception as e:
             self._set_status(f"Error guardando: {e}", "error")
+
+    def _save_as_file(self):
+        """Guardar archivo con un nombre diferente"""
+        file_path = filedialog.asksaveasfilename(
+            title="Guardar archivo como",
+            defaultextension=".txt",
+            filetypes=[("Archivos de texto", "*.txt"), ("Archivos Markdown", "*.md"), ("Todos", "*.*")])
+        
+        if file_path:
+            try:
+                content = self.text_editor.get(1.0, tk.END + "-1c")
+                Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                self.file_path = file_path
+                self.is_modified = False
+                self._update_title()
+                self._set_status(f"Archivo guardado como: {os.path.basename(file_path)}", "success")
+            except Exception as e:
+                self._set_status(f"Error guardando: {e}", "error")
     
     def _check_unsaved(self):
-        if not self.is_modified:
+        if not self.file_path or not self.is_modified:
             return True
         
-        result = tk.messagebox.askyesnocancel(
+        result = messagebox.askyesnocancel(
             "Cambios sin guardar",
             "¿Guardar cambios antes de continuar?")
         
@@ -171,14 +228,18 @@ class CapituladorGUI:
             self.root.destroy()
     
     def _on_text_change(self, event=None):
-        if not self.is_modified:
+        # Solo marcar como modificado si hay un archivo seleccionado
+        if self.file_path and not self.is_modified:
             self.is_modified = True
             self._update_title()
     
     def _update_title(self):
-        filename = os.path.basename(self.file_path)
-        indicator = " *" if self.is_modified else ""
-        self.root.title(f"Capitulador - {filename}{indicator}")
+        if self.file_path:
+            filename = os.path.basename(self.file_path)
+            indicator = " *" if self.is_modified else ""
+            self.root.title(f"Capitulador - {filename}{indicator}")
+        else:
+            self.root.title("Capitulador - Sin archivo")
     
     def _update_status(self, event=None):
         try:
@@ -304,6 +365,24 @@ class CapituladorGUI:
         self.is_modified = True
         self._update_title()
         self._update_status()
+
+    def _validate_file_selected(self):
+        """Valida que hay un archivo seleccionado y muestra mensaje si no"""
+        if not self.file_path:
+            messagebox.showwarning(
+                "Sin archivo",
+                "Primero debes abrir un archivo de manuscrito.\n\nUsa Ctrl+O o el menú Archivo > Abrir para seleccionar tu archivo.")
+            return False
+        return True
+
+    def _get_current_content(self):
+        """Obtiene el contenido actual del editor y lo guarda si hay cambios"""
+        if self.is_modified:
+            # Guardar cambios automáticamente antes de procesar
+            self._save_file()
+        # Leer el contenido del archivo para asegurar consistencia
+        with open(self.file_path, 'r', encoding='utf-8') as f:
+            return f.read()
     
     def _get_output_folder(self):
         import platform
@@ -334,28 +413,36 @@ class CapituladorGUI:
     
     def _save_current_content(self):
         content = self.text_editor.get(1.0, tk.END + "-1c")
-        with open(settings.SOURCE_FILE, 'w', encoding='utf-8') as f:
+        with open(self.file_path, 'w', encoding='utf-8') as f:
             f.write(content)
     
     def _process_all(self):
+        if not self._validate_file_selected():
+            return
         output_folder = self._get_output_folder()
         if output_folder:
             self._save_current_content()
             Thread(target=self._run_process_all, args=(output_folder,), daemon=True).start()
     
     def _generate_pdf(self):
+        if not self._validate_file_selected():
+            return
         output_folder = self._get_output_folder()
         if output_folder:
             self._save_current_content()
             Thread(target=self._run_generate_pdf, args=(output_folder,), daemon=True).start()
     
     def _generate_chapters(self):
+        if not self._validate_file_selected():
+            return
         output_folder = self._get_output_folder()
         if output_folder:
             self._save_current_content()
             Thread(target=self._run_generate_chapters, args=(output_folder,), daemon=True).start()
     
     def _generate_ebook(self):
+        if not self._validate_file_selected():
+            return
         output_folder = self._get_output_folder()
         if output_folder:
             self._save_current_content()
@@ -365,7 +452,7 @@ class CapituladorGUI:
         try:
             self.root.after(0, lambda: self._start_animation("Procesando"))
             
-            content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
+            content = self._get_current_content()
             processed = self.capitulador.content_processor.process_content(content)
             
             latex_file = output_folder / f"{self.book_settings.ALIAS}.tex"
@@ -387,7 +474,7 @@ class CapituladorGUI:
                          check=True, capture_output=True, text=True)
             
             manuscript_dest = output_folder / "manuscript.txt"
-            with open(settings.SOURCE_FILE, 'r', encoding='utf-8') as src, \
+            with open(self.file_path, 'r', encoding='utf-8') as src, \
                  open(manuscript_dest, 'w', encoding='utf-8') as dst:
                 dst.write(src.read())
             
@@ -404,7 +491,7 @@ class CapituladorGUI:
         try:
             self.root.after(0, lambda: self._start_animation("Generando PDF"))
             
-            content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
+            content = self._get_current_content()
             processed = self.capitulador.content_processor.process_content(content)
             latex_content = self.capitulador.latex_converter.convert_to_latex(processed)
             complete_latex = self.capitulador.latex_converter.create_complete_latex_document(latex_content)
@@ -428,7 +515,7 @@ class CapituladorGUI:
         try:
             self.root.after(0, lambda: self._start_animation("Generando capítulos"))
             
-            content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
+            content = self._get_current_content()
             processed = self.capitulador.content_processor.process_content(content)
             
             chapters_folder = output_folder / "chapters"
@@ -446,7 +533,7 @@ class CapituladorGUI:
         try:
             self.root.after(0, lambda: self._start_animation("Generando eBook"))
             
-            content = self.capitulador.file_handler.read_file(settings.SOURCE_FILE)
+            content = self._get_current_content()
             processed = self.capitulador.content_processor.process_content(content)
             latex_content = self.capitulador.latex_converter.convert_to_latex(processed)
             complete_latex = self.capitulador.latex_converter.create_complete_latex_document(latex_content)
