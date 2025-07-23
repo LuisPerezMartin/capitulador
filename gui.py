@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from capitulador import Capitulador
-from config.config import settings, BookSettings
+from config.config import BookSettings
 
 
 class CapituladorGUI:
