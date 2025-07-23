@@ -386,13 +386,19 @@ class CapituladorGUI:
             subprocess.run(["ebook-convert", str(pdf_file), str(azw3_file)], 
                          check=True, capture_output=True, text=True)
             
+            manuscript_dest = output_folder / "manuscript.txt"
+            with open(settings.SOURCE_FILE, 'r', encoding='utf-8') as src, \
+                 open(manuscript_dest, 'w', encoding='utf-8') as dst:
+                dst.write(src.read())
+            
             self._cleanup_files(output_folder)
             
             self.root.after(0, lambda: self._stop_animation())
             self.root.after(0, lambda: self._set_status(f"Completado: PDF, eBook, {count} capítulos", "success"))
         except Exception as e:
+            error_msg = str(e)
             self.root.after(0, lambda: self._stop_animation())
-            self.root.after(0, lambda: self._set_status(f"Error: {str(e)}", "error"))
+            self.root.after(0, lambda: self._set_status(f"Error: {error_msg}", "error"))
     
     def _run_generate_pdf(self, output_folder):
         try:
@@ -414,8 +420,9 @@ class CapituladorGUI:
             self.root.after(0, lambda: self._stop_animation())
             self.root.after(0, lambda: self._set_status("PDF generado correctamente", "success"))
         except Exception as e:
+            error_msg = str(e)
             self.root.after(0, lambda: self._stop_animation())
-            self.root.after(0, lambda: self._set_status(f"Error generando PDF: {str(e)}", "error"))
+            self.root.after(0, lambda: self._set_status(f"Error generando PDF: {error_msg}", "error"))
     
     def _run_generate_chapters(self, output_folder):
         try:
@@ -431,8 +438,9 @@ class CapituladorGUI:
             self.root.after(0, lambda: self._stop_animation())
             self.root.after(0, lambda: self._set_status(f"{count} capítulos generados", "success"))
         except Exception as e:
+            error_msg = str(e)
             self.root.after(0, lambda: self._stop_animation())
-            self.root.after(0, lambda: self._set_status(f"Error generando capítulos: {str(e)}", "error"))
+            self.root.after(0, lambda: self._set_status(f"Error generando capítulos: {error_msg}", "error"))
     
     def _run_generate_ebook(self, output_folder):
         try:
@@ -459,8 +467,9 @@ class CapituladorGUI:
             self.root.after(0, lambda: self._stop_animation())
             self.root.after(0, lambda: self._set_status("eBook generado correctamente", "success"))
         except Exception as e:
+            error_msg = str(e)
             self.root.after(0, lambda: self._stop_animation())
-            self.root.after(0, lambda: self._set_status(f"Error generando eBook: {str(e)}", "error"))
+            self.root.after(0, lambda: self._set_status(f"Error generando eBook: {error_msg}", "error"))
     
     def _generate_chapters_in_folder(self, content, chapters_folder):
         chapter_count = 0
