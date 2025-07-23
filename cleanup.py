@@ -1,37 +1,21 @@
 #!/usr/bin/env python3
-# Cleanup script for Capitulador project
-# Removes temporary files, old backups and unnecessary files
 
-import os
 import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 
 
 def cleanup_project():
-    # Clean unnecessary project files
     project_root = Path(__file__).parent
     
-    # Files and directories to clean
     cleanup_patterns = [
-        "**/__pycache__",
-        "**/*.pyc",
-        "**/*.pyo",
-        "**/*.pyd",
-        "**/.DS_Store",
-        "**/.vscode",
-        "**/*.aux",
-        "**/*.log",
-        "**/*.toc",
-        "**/*.out",
-        "**/*.fdb_latexmk",
-        "**/*.fls",
-        "**/*.synctex.gz",
+        "**/__pycache__", "**/*.pyc", "**/*.pyo", "**/*.pyd", "**/.DS_Store",
+        "**/.vscode", "**/*.aux", "**/*.log", "**/*.toc", "**/*.out",
+        "**/*.fdb_latexmk", "**/*.fls", "**/*.synctex.gz"
     ]
     
     cleaned_count = 0
     
-    # Limpiar archivos por patrones
     for pattern in cleanup_patterns:
         for item in project_root.glob(pattern):
             try:
@@ -46,7 +30,6 @@ def cleanup_project():
             except Exception as e:
                 print(f"Error eliminando {item}: {e}")
     
-    # Limpiar backups antiguos (más de 30 días)
     backup_folder = project_root / "generated" / "backups"
     if backup_folder.exists():
         cutoff_date = datetime.now() - timedelta(days=30)

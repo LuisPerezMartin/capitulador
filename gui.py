@@ -22,8 +22,6 @@ class CapituladorGUI:
         self.capitulador = Capitulador()
         self.book_settings = BookSettings()
         self.animation_job = None
-        
-        # Variables para la búsqueda
         self.search_positions = []
         self.current_search_index = -1
         
@@ -68,38 +66,42 @@ class CapituladorGUI:
         toolbar = ttk.Frame(self.root)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
         
-        # Botones principales
-        ttk.Button(toolbar, text="📁 Abrir", command=self._open_file).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="💾 Guardar", command=self._save_file).pack(side=tk.LEFT, padx=2)
-        ttk.Separator(toolbar, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        ttk.Button(toolbar, text="📋 Metadatos", command=self._edit_metadata).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="📄 Capítulo", command=self._insert_chapter).pack(side=tk.LEFT, padx=2)
-        ttk.Separator(toolbar, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        ttk.Button(toolbar, text="🔄 Todo", command=self._process_all).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="📖 PDF", command=self._generate_pdf).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="📚 eBook", command=self._generate_ebook).pack(side=tk.LEFT, padx=2)
+        buttons = [
+            ("📁 Abrir", self._open_file),
+            ("💾 Guardar", self._save_file),
+            (None, None),
+            ("📋 Metadatos", self._edit_metadata),
+            ("📄 Capítulo", self._insert_chapter),
+            (None, None),
+            ("🔄 Todo", self._process_all),
+            ("📖 PDF", self._generate_pdf),
+            ("📚 eBook", self._generate_ebook)
+        ]
         
-        # Frame de búsqueda en el extremo derecho
+        for text, command in buttons:
+            if text is None:
+                ttk.Separator(toolbar, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=5)
+            else:
+                ttk.Button(toolbar, text=text, command=command).pack(side=tk.LEFT, padx=2)
+        
+        self._create_search_frame(toolbar)
+
+    def _create_search_frame(self, toolbar):
         self.search_frame = ttk.Frame(toolbar)
         self.search_frame.pack(side=tk.RIGHT, padx=5)
         
-        # Componentes de búsqueda (inicialmente ocultos)
         ttk.Label(self.search_frame, text="🔍").pack(side=tk.LEFT, padx=2)
         self.search_var = tk.StringVar()
         self.search_entry = ttk.Entry(self.search_frame, textvariable=self.search_var, width=20)
         self.search_entry.pack(side=tk.LEFT, padx=2)
         
-        ttk.Button(self.search_frame, text="▲", command=self._search_previous, width=3).pack(side=tk.LEFT, padx=1)
-        ttk.Button(self.search_frame, text="▼", command=self._search_next, width=3).pack(side=tk.LEFT, padx=1)
-        ttk.Button(self.search_frame, text="✕", command=self._hide_search, width=3).pack(side=tk.LEFT, padx=1)
-        
-        # Configurar eventos de búsqueda
+        for text, command in [("▲", self._search_previous), ("▼", self._search_next), ("✕", self._hide_search)]:
+            ttk.Button(self.search_frame, text=text, command=command, width=3).pack(side=tk.LEFT, padx=1)
+
         self.search_var.trace('w', self._on_search_change)
-        self.search_entry.bind('<Return>', lambda e: self._search_next())
-        self.search_entry.bind('<Shift-Return>', lambda e: self._search_previous())
-        self.search_entry.bind('<Escape>', lambda e: self._hide_search())
+        for key, cmd in [('<Return>', self._search_next), ('<Shift-Return>', self._search_previous), ('<Escape>', self._hide_search)]:
+            self.search_entry.bind(key, lambda e, c=cmd: c())
         
-        # Inicialmente ocultar la búsqueda
         self.search_frame.pack_forget()
     
     def _create_editor(self):
@@ -124,43 +126,26 @@ class CapituladorGUI:
     def _bind_events(self):
         shortcuts = [
             ("<Control-o>", self._open_file), ("<Control-s>", self._save_file),
-            ("<Control-Shift-S>", self._save_as_file), ("<Control-q>", self._close_app), 
-            ("<Control-m>", self._edit_metadata), ("<Control-n>", self._insert_chapter), 
+            ("<Control-Shift-S>", self._save_as_file), ("<Control-q>", self._close_app),
+            ("<Control-m>", self._edit_metadata), ("<Control-n>", self._insert_chapter),
             ("<Control-p>", self._insert_page_break), ("<Control-f>", self._toggle_search),
-            ("<F5>", self._process_all), ("<F6>", self._generate_pdf), 
+            ("<F5>", self._process_all), ("<F6>", self._generate_pdf),
             ("<F7>", self._generate_chapters), ("<F8>", self._generate_ebook)
         ]
         for key, cmd in shortcuts:
             self.root.bind(key, lambda e, c=cmd: c())
         
-        def safe_redo(event):
-            try:
-                self.text_editor.edit_redo()
-            except tk.TclError:
-                pass
-            return "break" 
-        
-        self.text_editor.bind("<Control-y>", safe_redo)
-        
+        self.text_editor.bind("<Control-y>", self._safe_redo)
         self.root.protocol("WM_DELETE_WINDOW", self._close_app)
-    
-    def _load_file(self):
-        if self.file_path and os.path.exists(self.file_path):
-            try:
-                with open(self.file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                self.text_editor.delete(1.0, tk.END)
-                self.text_editor.insert(1.0, content)
-                self.text_editor.edit_reset()
-                self.is_modified = False
-                self._update_title()
-                self._update_status()
-            except Exception as e:
-                self._set_status(f"Error cargando archivo: {e}", "error")
-        self._update_status()
 
+    def _safe_redo(self, event):
+        try:
+            self.text_editor.edit_redo()
+        except tk.TclError:
+            pass
+        return "break"
+    
     def _show_welcome_message(self):
-        """Muestra un mensaje de bienvenida cuando no hay archivo seleccionado"""
         welcome_text = """Bienvenido a Capitulador
 
 Para comenzar, selecciona un archivo de manuscrito:
@@ -178,7 +163,7 @@ Una vez abierto el archivo, podrás:
         
         self.text_editor.delete(1.0, tk.END)
         self.text_editor.insert(1.0, welcome_text)
-        self.text_editor.config(state='disabled') 
+        self.text_editor.config(state='disabled')
         self._update_title()
         self._update_status()
     
@@ -194,7 +179,7 @@ Una vez abierto el archivo, podrás:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                self.text_editor.config(state='normal') 
+                self.text_editor.config(state='normal')
                 self.text_editor.delete(1.0, tk.END)
                 self.text_editor.insert(1.0, content)
                 self.text_editor.edit_reset()
@@ -208,12 +193,10 @@ Una vez abierto el archivo, podrás:
     
     def _save_file(self):
         if not self.file_path:
-            # Si no hay archivo seleccionado, abrir diálogo "Guardar como"
             file_path = filedialog.asksaveasfilename(
                 title="Guardar archivo",
                 defaultextension=".txt",
                 filetypes=[("Archivos de texto", "*.txt"), ("Archivos Markdown", "*.md"), ("Todos", "*.*")])
-            
             if not file_path:
                 return
             self.file_path = file_path
@@ -230,7 +213,6 @@ Una vez abierto el archivo, podrás:
             self._set_status(f"Error guardando: {e}", "error")
 
     def _save_as_file(self):
-        """Guardar archivo con un nombre diferente"""
         file_path = filedialog.asksaveasfilename(
             title="Guardar archivo como",
             defaultextension=".txt",
@@ -269,7 +251,6 @@ Una vez abierto el archivo, podrás:
             self.root.destroy()
     
     def _on_text_change(self, event=None):
-        # Solo marcar como modificado si hay un archivo seleccionado
         if self.file_path and not self.is_modified:
             self.is_modified = True
             self._update_title()
@@ -294,7 +275,7 @@ Una vez abierto el archivo, podrás:
         self.status_var.set(message)
     
     def _animate_status(self, base_text):
-        if not hasattr(self, '_animation_running') or not self._animation_running:
+        if not getattr(self, '_animation_running', False):
             return
         
         dots = "." * (getattr(self, '_animation_dots', 0) + 1)
@@ -408,26 +389,22 @@ Una vez abierto el archivo, podrás:
         self._update_status()
 
     def _toggle_search(self):
-        """Mostrar/ocultar la barra de búsqueda"""
         if self.search_frame.winfo_viewable():
             self._hide_search()
         else:
             self._show_search()
 
     def _show_search(self):
-        """Mostrar la barra de búsqueda y enfocar el campo"""
         self.search_frame.pack(side=tk.RIGHT, padx=5)
         self.search_entry.focus_set()
         self.search_entry.select_range(0, tk.END)
 
     def _hide_search(self):
-        """Ocultar la barra de búsqueda y limpiar resaltados"""
         self.search_frame.pack_forget()
         self._clear_search_highlights()
         self.text_editor.focus_set()
 
     def _on_search_change(self, *args):
-        """Buscar automáticamente cuando cambia el texto de búsqueda"""
         search_text = self.search_var.get()
         if search_text:
             self._search_text(search_text)
@@ -435,17 +412,13 @@ Una vez abierto el archivo, podrás:
             self._clear_search_highlights()
 
     def _search_text(self, search_text):
-        """Buscar y resaltar todas las ocurrencias del texto"""
         self._clear_search_highlights()
-        
         if not search_text:
             return
         
-        # Configurar los tags para resaltar
-        self.text_editor.tag_configure("search_highlight", background="#FFE135", foreground="black")  # Amarillo claro para todas las coincidencias
-        self.text_editor.tag_configure("search_current", background="#FF6B35", foreground="white")   # Naranja para la coincidencia actual
+        self.text_editor.tag_configure("search_highlight", background="#FFE135", foreground="black")
+        self.text_editor.tag_configure("search_current", background="#FF6B35", foreground="white")
         
-        # Buscar todas las ocurrencias y guardar sus posiciones
         self.search_positions = []
         start_pos = "1.0"
         while True:
@@ -458,43 +431,33 @@ Una vez abierto el archivo, podrás:
             self.search_positions.append((pos, end_pos))
             start_pos = end_pos
         
-        # Si hay coincidencias, ir a la primera
         if self.search_positions:
             self.current_search_index = 0
             self._highlight_current_match()
 
     def _clear_search_highlights(self):
-        """Limpiar todos los resaltados de búsqueda"""
         self.text_editor.tag_remove("search_highlight", "1.0", tk.END)
         self.text_editor.tag_remove("search_current", "1.0", tk.END)
         self.search_positions = []
         self.current_search_index = -1
 
     def _highlight_current_match(self):
-        """Resaltar la coincidencia actual con color diferente"""
-        if not hasattr(self, 'search_positions') or not self.search_positions:
+        if not self.search_positions:
             return
         
-        # Limpiar el resaltado actual anterior
         self.text_editor.tag_remove("search_current", "1.0", tk.END)
         
         if 0 <= self.current_search_index < len(self.search_positions):
             pos, end_pos = self.search_positions[self.current_search_index]
-            # Aplicar el resaltado especial a la coincidencia actual
             self.text_editor.tag_add("search_current", pos, end_pos)
-            # Posicionar el cursor al inicio de la coincidencia
             self.text_editor.mark_set(tk.INSERT, pos)
-            # Asegurar que la coincidencia sea visible
             self.text_editor.see(pos)
-            # Actualizar contador en la barra de búsqueda
             self._update_search_counter()
 
     def _update_search_counter(self):
-        """Actualizar el contador de búsqueda en la interfaz"""
-        if hasattr(self, 'search_positions') and self.search_positions:
+        if self.search_positions:
             total = len(self.search_positions)
             current = self.current_search_index + 1
-            # Crear o actualizar label de contador si no existe
             if not hasattr(self, 'search_counter_label'):
                 self.search_counter_label = ttk.Label(self.search_frame, text="")
                 self.search_counter_label.pack(side=tk.LEFT, padx=5)
@@ -503,25 +466,18 @@ Una vez abierto el archivo, podrás:
             self.search_counter_label.config(text="")
 
     def _search_next(self):
-        """Buscar la siguiente ocurrencia"""
-        if not hasattr(self, 'search_positions') or not self.search_positions:
+        if not self.search_positions:
             return
-        
-        # Avanzar al siguiente índice (circular)
         self.current_search_index = (self.current_search_index + 1) % len(self.search_positions)
         self._highlight_current_match()
 
     def _search_previous(self):
-        """Buscar la ocurrencia anterior"""
-        if not hasattr(self, 'search_positions') or not self.search_positions:
+        if not self.search_positions:
             return
-        
-        # Retroceder al índice anterior (circular)
         self.current_search_index = (self.current_search_index - 1) % len(self.search_positions)
         self._highlight_current_match()
 
     def _validate_file_selected(self):
-        """Valida que hay un archivo seleccionado y muestra mensaje si no"""
         if not self.file_path:
             messagebox.showwarning(
                 "Sin archivo",
@@ -530,11 +486,8 @@ Una vez abierto el archivo, podrás:
         return True
 
     def _get_current_content(self):
-        """Obtiene el contenido actual del editor y lo guarda si hay cambios"""
         if self.is_modified:
-            # Guardar cambios automáticamente antes de procesar
             self._save_file()
-        # Leer el contenido del archivo para asegurar consistencia
         with open(self.file_path, 'r', encoding='utf-8') as f:
             return f.read()
     
@@ -544,9 +497,9 @@ Una vez abierto el archivo, podrás:
         
         if system == "Windows":
             documents_folder = Path.home() / "Documents"
-        elif system == "Darwin":  # macOS
+        elif system == "Darwin":
             documents_folder = Path.home() / "Documents"
-        else:  # Linux and other Unix-like systems
+        else:
             documents_folder = Path.home() / "Documents"
         
         folder = filedialog.askdirectory(

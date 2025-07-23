@@ -12,12 +12,9 @@ import panflute as pf
 
 from config.config import settings
 
-# Configurar logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 class CapituladorError(Exception):
     pass
@@ -29,7 +26,7 @@ class FileHandler:
         try:
             with open(file_path, "r", encoding=encoding) as file:
                 content = file.read()
-                logger.info(f"Archivo leído exitosamente: {file_path}")
+                logger.info(f"Archivo leído: {file_path}")
                 return content
         except FileNotFoundError:
             error_msg = f"Archivo no encontrado: {file_path}"
@@ -44,10 +41,9 @@ class FileHandler:
     def write_file(file_path: str, content: str, encoding: str = "utf-8") -> None:
         try:
             Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-            
             with open(file_path, "w", encoding=encoding) as file:
                 file.write(content)
-                logger.info(f"Archivo escrito exitosamente: {file_path}")
+                logger.info(f"Archivo escrito: {file_path}")
         except Exception as e:
             error_msg = f"Error escribiendo archivo {file_path}: {e}"
             logger.error(error_msg)
@@ -57,7 +53,7 @@ class FileHandler:
     def ensure_directory_exists(directory: str) -> None:
         try:
             Path(directory).mkdir(parents=True, exist_ok=True)
-            logger.info(f"Directorio asegurado: {directory}")
+            logger.info(f"Directorio creado: {directory}")
         except Exception as e:
             error_msg = f"Error creando directorio {directory}: {e}"
             logger.error(error_msg)
@@ -80,7 +76,7 @@ class ContentProcessor:
                         skip_lines = ContentProcessor._count_empty_lines(lines, i + 1)
                         ContentProcessor._add_spacing(new_content, skip_lines)
 
-        logger.info("Contenido procesado exitosamente")
+        logger.info("Contenido procesado")
         return "\n".join(new_content)
     
     @staticmethod
@@ -106,11 +102,7 @@ class LatexConverter:
     @staticmethod
     def convert_to_latex(content: str) -> str:
         try:
-            latex_content = pf.convert_text(
-                content, 
-                input_format="markdown", 
-                output_format="latex"
-            )
+            latex_content = pf.convert_text(content, input_format="markdown", output_format="latex")
             logger.info("Conversión a LaTeX exitosa")
             return latex_content
         except Exception as e:
@@ -124,26 +116,20 @@ class LatexConverter:
 
 
 class PDFGenerator:
-    """Genera archivos PDF usando pdflatex."""
-    
     @staticmethod
     def generate_pdf() -> None:
         output_directory = "generated"
-        
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["pdflatex", "-output-directory", output_directory, settings.LATEX_FILE],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            logger.info("PDF generado exitosamente")
+                check=True, capture_output=True, text=True)
+            logger.info("PDF generado")
         except subprocess.CalledProcessError as e:
             error_msg = f"Error ejecutando pdflatex: {e}"
             logger.error(error_msg)
             raise CapituladorError(error_msg)
         except FileNotFoundError:
-            error_msg = "pdflatex no encontrado. Asegúrese de tener LaTeX instalado."
+            error_msg = "pdflatex no encontrado. Instala LaTeX."
             logger.error(error_msg)
             raise CapituladorError(error_msg)
 
@@ -153,11 +139,9 @@ class BackupManager:
     def create_backup() -> str:
         try:
             FileHandler.ensure_directory_exists(settings.BACKUPS_FOLDER)
-            
             current_date = datetime.now().strftime("%Y-%m-%d")
             backup_name = f"{current_date}_manuscript.txt"
             backup_path = os.path.join(settings.BACKUPS_FOLDER, backup_name)
-            
             shutil.copy(settings.SOURCE_FILE, backup_path)
             logger.info(f"Backup creado: {backup_name}")
             return backup_name
@@ -175,7 +159,6 @@ class ChapterGenerator:
         try:
             content = FileHandler.read_file(settings.SOURCE_FILE)
             lines = content.splitlines(keepends=True)
-            
             FileHandler.ensure_directory_exists("generated/chapters")
             
             chapter_count = 0
@@ -189,7 +172,6 @@ class ChapterGenerator:
                         chapter_count += 1
                         chapter_text = []
                     current_chapter = line.strip()
-                
                 chapter_text.append(line)
             
             if current_chapter is not None:
@@ -205,7 +187,6 @@ class ChapterGenerator:
     
     @staticmethod
     def _write_chapter(chapter_number: int, chapter_text: List[str]) -> None:
-        """Escribe un capítulo individual a un archivo."""
         chapter_path = f"generated/chapters/chapter{chapter_number}.txt"
         content = "".join(chapter_text)
         FileHandler.write_file(chapter_path, content)
@@ -234,7 +215,7 @@ class EbookConverter:
             logger.error(error_msg)
             raise CapituladorError(error_msg)
         except FileNotFoundError:
-            error_msg = "ebook-convert no encontrado. Asegúrese de tener Calibre instalado."
+            error_msg = "ebook-convert no encontrado. Instala Calibre."
             logger.error(error_msg)
             raise CapituladorError(error_msg)
 
@@ -249,7 +230,7 @@ class SystemCleaner:
             except subprocess.CalledProcessError as e:
                 logger.warning(f"Error ejecutando dot_clean: {e}")
         else:
-            logger.info("Limpieza de archivos .DS_Store omitida (solo macOS)")
+            logger.info("Limpieza omitida (solo macOS)")
 
 
 class Capitulador:
@@ -265,43 +246,32 @@ class Capitulador:
     
     def process_manuscript(self) -> None:
         try:
-            logger.info("Iniciando procesamiento del manuscrito")
+            logger.info("Iniciando procesamiento")
             
-            # 1. Leer y procesar contenido
             content = self.file_handler.read_file(settings.SOURCE_FILE)
             processed_content = self.content_processor.process_content(content)
             self.file_handler.write_file(settings.WORK_FILE, processed_content)
             
-            # 2. Convertir a LaTeX
             latex_content = self.latex_converter.convert_to_latex(processed_content)
             complete_latex = self.latex_converter.create_complete_latex_document(latex_content)
             self.file_handler.write_file(settings.LATEX_FILE, complete_latex)
             
-            # 3. Generar PDF
             self.pdf_generator.generate_pdf()
-            
-            # 4. Crear backup
             backup_name = self.backup_manager.create_backup()
-            
-            # 5. Generar capítulos
             chapter_count = self.chapter_generator.generate_chapters()
-            
-            # 6. Convertir a ebook
             self.ebook_converter.convert_to_ebook()
-            
-            # 7. Limpiar archivos temporales
             self.system_cleaner.clean_dot_files()
             
-            logger.info(f"Procesamiento completado exitosamente")
-            logger.info(f"Backup: {backup_name} en {settings.BACKUPS_FOLDER}")
-            logger.info(f"Capítulos generados: {chapter_count}")
+            logger.info(f"Procesamiento completado")
+            logger.info(f"Backup: {backup_name}")
+            logger.info(f"Capítulos: {chapter_count}")
             
         except CapituladorError as e:
-            logger.error(f"Error durante el procesamiento: {e}")
+            logger.error(f"Error durante procesamiento: {e}")
             raise
         except Exception as e:
             logger.error(f"Error inesperado: {e}")
-            raise CapituladorError(f"Error inesperado durante el procesamiento: {e}")
+            raise CapituladorError(f"Error inesperado: {e}")
 
 
 def main() -> None:
@@ -312,11 +282,12 @@ def main() -> None:
         logger.error(f"Error del Capitulador: {e}")
         exit(1)
     except KeyboardInterrupt:
-        logger.info("Procesamiento interrumpido por el usuario")
+        logger.info("Procesamiento interrumpido")
         exit(1)
     except Exception as e:
-        logger.error(f"Error crítico inesperado: {e}")
+        logger.error(f"Error crítico: {e}")
         exit(1)
+
 
 if __name__ == "__main__":
     main()

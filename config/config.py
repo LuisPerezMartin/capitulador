@@ -27,28 +27,33 @@ class BookSettings(BaseSettings):
 
 
 class PathSettings(BaseSettings):
-    SOURCE_FILE: str = "" 
+    SOURCE_FILE: str = ""
+    
     @property
     def AZW3_FILE(self) -> str:
         return f"generated/{BookSettings().ALIAS}.azw3"
+    
     @property
     def LATEX_FILE(self) -> str:
         return f"generated/{BookSettings().ALIAS}.tex"
+    
     @property
     def PDF_FILE(self) -> str:
         return f"generated/{BookSettings().ALIAS}.pdf"
+    
     @property
     def AUX_FILE(self) -> str:
         return f"generated/{BookSettings().ALIAS}.aux"
+    
     @property
     def LOG_FILE(self) -> str:
         return f"generated/{BookSettings().ALIAS}.log"
+    
     BACKUPS_FOLDER: str = "generated/backups"
 
 
 class LaTexSettings(BaseSettings):
-    LATEX_BEGIN: str = r"""
-\pdfminorversion=4
+    LATEX_BEGIN: str = r"""\pdfminorversion=4
 \documentclass[]{book}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
