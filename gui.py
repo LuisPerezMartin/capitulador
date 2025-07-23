@@ -23,6 +23,10 @@ class CapituladorGUI:
         self.book_settings = BookSettings()
         self.animation_job = None
         
+        # Variables para la búsqueda
+        self.search_positions = []
+        self.current_search_index = -1
+        
         self._setup_ui()
         self._show_welcome_message()
     
@@ -47,6 +51,8 @@ class CapituladorGUI:
         
         edit_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Editar", menu=edit_menu)
+        edit_menu.add_command(label="Buscar", command=self._toggle_search, accelerator="Ctrl+F")
+        edit_menu.add_separator()
         edit_menu.add_command(label="Metadatos", command=self._edit_metadata, accelerator="Ctrl+M")
         edit_menu.add_command(label="Nuevo capítulo", command=self._insert_chapter, accelerator="Ctrl+N")
         edit_menu.add_command(label="Salto de página", command=self._insert_page_break, accelerator="Ctrl+P")
@@ -62,6 +68,7 @@ class CapituladorGUI:
         toolbar = ttk.Frame(self.root)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
         
+        # Botones principales
         ttk.Button(toolbar, text="📁 Abrir", command=self._open_file).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="💾 Guardar", command=self._save_file).pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=5)
@@ -71,6 +78,29 @@ class CapituladorGUI:
         ttk.Button(toolbar, text="🔄 Todo", command=self._process_all).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="📖 PDF", command=self._generate_pdf).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="📚 eBook", command=self._generate_ebook).pack(side=tk.LEFT, padx=2)
+        
+        # Frame de búsqueda en el extremo derecho
+        self.search_frame = ttk.Frame(toolbar)
+        self.search_frame.pack(side=tk.RIGHT, padx=5)
+        
+        # Componentes de búsqueda (inicialmente ocultos)
+        ttk.Label(self.search_frame, text="🔍").pack(side=tk.LEFT, padx=2)
+        self.search_var = tk.StringVar()
+        self.search_entry = ttk.Entry(self.search_frame, textvariable=self.search_var, width=20)
+        self.search_entry.pack(side=tk.LEFT, padx=2)
+        
+        ttk.Button(self.search_frame, text="▲", command=self._search_previous, width=3).pack(side=tk.LEFT, padx=1)
+        ttk.Button(self.search_frame, text="▼", command=self._search_next, width=3).pack(side=tk.LEFT, padx=1)
+        ttk.Button(self.search_frame, text="✕", command=self._hide_search, width=3).pack(side=tk.LEFT, padx=1)
+        
+        # Configurar eventos de búsqueda
+        self.search_var.trace('w', self._on_search_change)
+        self.search_entry.bind('<Return>', lambda e: self._search_next())
+        self.search_entry.bind('<Shift-Return>', lambda e: self._search_previous())
+        self.search_entry.bind('<Escape>', lambda e: self._hide_search())
+        
+        # Inicialmente ocultar la búsqueda
+        self.search_frame.pack_forget()
     
     def _create_editor(self):
         self.text_editor = scrolledtext.ScrolledText(
@@ -96,9 +126,9 @@ class CapituladorGUI:
             ("<Control-o>", self._open_file), ("<Control-s>", self._save_file),
             ("<Control-Shift-S>", self._save_as_file), ("<Control-q>", self._close_app), 
             ("<Control-m>", self._edit_metadata), ("<Control-n>", self._insert_chapter), 
-            ("<Control-p>", self._insert_page_break), ("<F5>", self._process_all), 
-            ("<F6>", self._generate_pdf), ("<F7>", self._generate_chapters), 
-            ("<F8>", self._generate_ebook)
+            ("<Control-p>", self._insert_page_break), ("<Control-f>", self._toggle_search),
+            ("<F5>", self._process_all), ("<F6>", self._generate_pdf), 
+            ("<F7>", self._generate_chapters), ("<F8>", self._generate_ebook)
         ]
         for key, cmd in shortcuts:
             self.root.bind(key, lambda e, c=cmd: c())
@@ -376,6 +406,119 @@ Una vez abierto el archivo, podrás:
         self.is_modified = True
         self._update_title()
         self._update_status()
+
+    def _toggle_search(self):
+        """Mostrar/ocultar la barra de búsqueda"""
+        if self.search_frame.winfo_viewable():
+            self._hide_search()
+        else:
+            self._show_search()
+
+    def _show_search(self):
+        """Mostrar la barra de búsqueda y enfocar el campo"""
+        self.search_frame.pack(side=tk.RIGHT, padx=5)
+        self.search_entry.focus_set()
+        self.search_entry.select_range(0, tk.END)
+
+    def _hide_search(self):
+        """Ocultar la barra de búsqueda y limpiar resaltados"""
+        self.search_frame.pack_forget()
+        self._clear_search_highlights()
+        self.text_editor.focus_set()
+
+    def _on_search_change(self, *args):
+        """Buscar automáticamente cuando cambia el texto de búsqueda"""
+        search_text = self.search_var.get()
+        if search_text:
+            self._search_text(search_text)
+        else:
+            self._clear_search_highlights()
+
+    def _search_text(self, search_text):
+        """Buscar y resaltar todas las ocurrencias del texto"""
+        self._clear_search_highlights()
+        
+        if not search_text:
+            return
+        
+        # Configurar los tags para resaltar
+        self.text_editor.tag_configure("search_highlight", background="#FFE135", foreground="black")  # Amarillo claro para todas las coincidencias
+        self.text_editor.tag_configure("search_current", background="#FF6B35", foreground="white")   # Naranja para la coincidencia actual
+        
+        # Buscar todas las ocurrencias y guardar sus posiciones
+        self.search_positions = []
+        start_pos = "1.0"
+        while True:
+            pos = self.text_editor.search(search_text, start_pos, tk.END, nocase=True)
+            if not pos:
+                break
+            
+            end_pos = f"{pos}+{len(search_text)}c"
+            self.text_editor.tag_add("search_highlight", pos, end_pos)
+            self.search_positions.append((pos, end_pos))
+            start_pos = end_pos
+        
+        # Si hay coincidencias, ir a la primera
+        if self.search_positions:
+            self.current_search_index = 0
+            self._highlight_current_match()
+
+    def _clear_search_highlights(self):
+        """Limpiar todos los resaltados de búsqueda"""
+        self.text_editor.tag_remove("search_highlight", "1.0", tk.END)
+        self.text_editor.tag_remove("search_current", "1.0", tk.END)
+        self.search_positions = []
+        self.current_search_index = -1
+
+    def _highlight_current_match(self):
+        """Resaltar la coincidencia actual con color diferente"""
+        if not hasattr(self, 'search_positions') or not self.search_positions:
+            return
+        
+        # Limpiar el resaltado actual anterior
+        self.text_editor.tag_remove("search_current", "1.0", tk.END)
+        
+        if 0 <= self.current_search_index < len(self.search_positions):
+            pos, end_pos = self.search_positions[self.current_search_index]
+            # Aplicar el resaltado especial a la coincidencia actual
+            self.text_editor.tag_add("search_current", pos, end_pos)
+            # Posicionar el cursor al inicio de la coincidencia
+            self.text_editor.mark_set(tk.INSERT, pos)
+            # Asegurar que la coincidencia sea visible
+            self.text_editor.see(pos)
+            # Actualizar contador en la barra de búsqueda
+            self._update_search_counter()
+
+    def _update_search_counter(self):
+        """Actualizar el contador de búsqueda en la interfaz"""
+        if hasattr(self, 'search_positions') and self.search_positions:
+            total = len(self.search_positions)
+            current = self.current_search_index + 1
+            # Crear o actualizar label de contador si no existe
+            if not hasattr(self, 'search_counter_label'):
+                self.search_counter_label = ttk.Label(self.search_frame, text="")
+                self.search_counter_label.pack(side=tk.LEFT, padx=5)
+            self.search_counter_label.config(text=f"{current}/{total}")
+        elif hasattr(self, 'search_counter_label'):
+            self.search_counter_label.config(text="")
+
+    def _search_next(self):
+        """Buscar la siguiente ocurrencia"""
+        if not hasattr(self, 'search_positions') or not self.search_positions:
+            return
+        
+        # Avanzar al siguiente índice (circular)
+        self.current_search_index = (self.current_search_index + 1) % len(self.search_positions)
+        self._highlight_current_match()
+
+    def _search_previous(self):
+        """Buscar la ocurrencia anterior"""
+        if not hasattr(self, 'search_positions') or not self.search_positions:
+            return
+        
+        # Retroceder al índice anterior (circular)
+        self.current_search_index = (self.current_search_index - 1) % len(self.search_positions)
+        self._highlight_current_match()
 
     def _validate_file_selected(self):
         """Valida que hay un archivo seleccionado y muestra mensaje si no"""
