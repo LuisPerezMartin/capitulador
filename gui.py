@@ -103,6 +103,15 @@ class CapituladorGUI:
         for key, cmd in shortcuts:
             self.root.bind(key, lambda e, c=cmd: c())
         
+        def safe_redo(event):
+            try:
+                self.text_editor.edit_redo()
+            except tk.TclError:
+                pass
+            return "break" 
+        
+        self.text_editor.bind("<Control-y>", safe_redo)
+        
         self.root.protocol("WM_DELETE_WINDOW", self._close_app)
     
     def _load_file(self):
@@ -112,6 +121,7 @@ class CapituladorGUI:
                     content = f.read()
                 self.text_editor.delete(1.0, tk.END)
                 self.text_editor.insert(1.0, content)
+                self.text_editor.edit_reset()
                 self.is_modified = False
                 self._update_title()
                 self._update_status()
@@ -154,9 +164,10 @@ Una vez abierto el archivo, podrás:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                self.text_editor.config(state='normal')  # Habilitar edición
+                self.text_editor.config(state='normal') 
                 self.text_editor.delete(1.0, tk.END)
                 self.text_editor.insert(1.0, content)
+                self.text_editor.edit_reset()
                 self.file_path = file_path
                 self.is_modified = False
                 self._update_title()
